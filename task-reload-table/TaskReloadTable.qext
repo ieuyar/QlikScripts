@@ -1,0 +1,14 @@
+{
+	"name": "Task Reload Table",
+	"description": "A table with a reload button on every row that starts the QMC reload task in that row",
+	"type": "visualization",
+	"version": "1.0.0",
+	"icon": "table",
+	"author": "Etem Uyar",
+	"homepage": "https://github.com/ieuyar/QlikScripts",
+	"keywords": "qlik-sense, visualization, table, reload, task",
+	"license": "MIT",
+	"dependencies": {
+		"qlik-sense": ">=3.2.x"
+	}
+}

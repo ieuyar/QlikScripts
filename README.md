@@ -1,6 +1,12 @@
-# Qlik Cloud Scripts
+# Qlik Scripts
 
-Small, practical scripts for Qlik Cloud developers.
+Small, practical scripts and extensions for Qlik Sense developers, both Qlik Cloud
+and client-managed.
+
+| | Platform | What it is |
+|---|---|---|
+| [Engine API from the browser console](#engine-api-from-the-browser-console) | Qlik Cloud | Dump every object, expression and variable of an app to JSON |
+| [Task Reload Table](task-reload-table/) | Client-managed (QSEoW) | Extension: a table with a reload button on every row that starts that row's QMC task |
 
 ## Engine API from the browser console
 
@@ -41,6 +47,16 @@ Progress is printed with a `[dump]` prefix.
   `props.qHyperCubeDef.qMeasures[]`, either inline (`qDef.qDef`) or as a
   reference to a master measure (`qLibraryId`).
 - Follow your organisation's policies before running scripts against a tenant.
+
+## Task Reload Table
+
+A Qlik Sense extension for client-managed sites: a table where every row has a
+**Reload** button that starts the QMC reload task in that row and shows its
+progress. Per-column colour expressions, sorting and selections work as in a
+native table. Download the zip from
+[`task-reload-table/dist`](task-reload-table/dist/TaskReloadTable.zip) and import
+it in the QMC. Setup, options and the security rules it needs are in the
+[extension README](task-reload-table/README.md).
 
 ## License
 

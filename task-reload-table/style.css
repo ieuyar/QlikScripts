@@ -1,0 +1,139 @@
+/* Task Reload Table */
+
+.trt-wrap {
+	height: 100%;
+	overflow: auto;
+}
+
+.trt-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 12px;
+	color: #2B2B2B;
+}
+
+.trt-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: #FFFFFF;
+	color: #5F6368;
+	font-weight: 600;
+	text-align: left;
+	padding: 6px 8px;
+	border-bottom: 1px solid #BFBFBF;
+	white-space: nowrap;
+	cursor: pointer;
+	user-select: none;
+}
+
+.trt-table th.trt-asc::after {
+	content: " \25B2";
+	font-size: 9px;
+}
+
+.trt-table th.trt-desc::after {
+	content: " \25BC";
+	font-size: 9px;
+}
+
+.trt-table td {
+	padding: 4px 8px;
+	border-bottom: 1px solid #ECECEC;
+	vertical-align: middle;
+}
+
+.trt-table tbody tr:hover td {
+	box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.03);
+}
+
+.trt-table .trt-num {
+	text-align: right;
+}
+
+.trt-table td.trt-selectable {
+	cursor: pointer;
+}
+
+.trt-table .trt-btn-col {
+	width: 1%;
+	white-space: nowrap;
+	text-align: center;
+	cursor: default;
+}
+
+/* Button */
+
+.trt-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 110px;
+	justify-content: center;
+	padding: 3px 10px;
+	font-size: 12px;
+	color: #2B2B2B;
+	background: #FFFFFF;
+	border: 1px solid #BFBFBF;
+	border-radius: 3px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.trt-btn:hover:not(:disabled) {
+	border-color: #C8102E;
+	color: #C8102E;
+}
+
+.trt-btn .trt-icon {
+	font-size: 12px;
+}
+
+.trt-btn.trt-confirm {
+	background: #C8102E;
+	border-color: #C8102E;
+	color: #FFFFFF;
+}
+
+.trt-btn.trt-confirm:hover:not(:disabled) {
+	color: #FFFFFF;
+}
+
+.trt-btn.trt-running {
+	background: rgba(255, 184, 28, 0.25);
+	border-color: #FFB81C;
+	cursor: progress;
+}
+
+.trt-btn.trt-done {
+	background: rgba(80, 158, 47, 0.2);
+	border-color: #509E2F;
+}
+
+.trt-btn.trt-failed {
+	background: #FBE7EA;
+	border-color: #C8102E;
+	color: #C8102E;
+}
+
+.trt-btn.trt-none,
+.trt-btn:disabled {
+	color: #A6A6A6;
+	border-color: #E0E0E0;
+	cursor: not-allowed;
+}
+
+.trt-spin {
+	animation: trt-rotate 1.5s linear infinite;
+}
+
+@keyframes trt-rotate {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+.trt-note {
+	padding: 6px 8px;
+	color: #5F6368;
+	font-size: 12px;
+}
