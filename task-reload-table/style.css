@@ -22,7 +22,10 @@
 	text-align: left;
 	padding: 6px 8px;
 	border-bottom: 1px solid #BFBFBF;
-	white-space: nowrap;
+	vertical-align: bottom;
+	white-space: normal;
+	overflow-wrap: break-word;
+	overflow: hidden;
 	cursor: pointer;
 	user-select: none;
 }
@@ -38,13 +41,16 @@
 }
 
 .trt-table td {
+	overflow-wrap: break-word;
+	overflow: hidden;
 	padding: 4px 8px;
 	border-bottom: 1px solid #ECECEC;
 	vertical-align: middle;
 }
 
-.trt-table tbody tr:hover td {
-	box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.03);
+/* Hover on cells with a colour expression: darken slightly, keep the colour */
+.trt-table tbody tr:hover td[style*="background-color"] {
+	box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.04);
 }
 
 .trt-table .trt-num {
@@ -254,4 +260,25 @@
 
 .trt-pop-clear:hover {
 	border-color: #2B2B2B;
+}
+
+/* Column resize handle on the right edge of each header */
+.trt-resize {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 6px;
+	height: 100%;
+	cursor: col-resize;
+	z-index: 2;
+}
+
+.trt-resize:hover,
+.trt-resize.trt-resizing {
+	background: rgba(0, 0, 0, 0.15);
+}
+
+/* Resizing also works in edit mode (widths are then saved) */
+.trt-wrap.trt-edit .trt-resize {
+	pointer-events: auto;
 }

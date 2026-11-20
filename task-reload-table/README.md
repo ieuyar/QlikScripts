@@ -51,12 +51,35 @@ has an `id` and a child `app` object with the app ID.
 | Select on dimension cell click | on | Same as a native table |
 | Language of button texts | English | English / Türkçe |
 
+### Presentation
+
+The **Presentation** section works like the styling options of the native table.
+Everything starts from the current look, and header and row text follow the app
+theme until you switch them to *Custom*.
+
+| Group | Options |
+|---|---|
+| Object | Border (colour, width), corner radius and shadow around the whole object, title included |
+| Header | Theme default or custom: font size, text colour, background colour, bold. Text alignment |
+| Rows | Theme default or custom: font size, text colour. Row height (compact / medium / spacious), alternating row colour, hover colour, grid lines (horizontal / both / none) and their colour |
+| Columns | Width: auto (fill the object), fit to content, or fixed px per column (e.g. `200,150,120` in visible column order). Text wrapping: on wraps headers and cells onto more lines in narrow columns; off keeps one line and ends with "…" |
+| Button | Minimum width. Default or custom colours for hover / confirm, running, finished and failed |
+
+Colour pickers offer the theme palette and a custom colour. Cell colour
+expressions always win over the alternating row and hover colours.
+
 **Colours:** every dimension and measure has a *Background colour expression* and
-a *Text colour expression*, like the native table, e.g.
+a *Text colour expression* text box (type the expression starting with `=`), e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.
 
-**Sorting:** click a column header (ascending → descending → original). The
-default order comes from the *Sorting* section.
+**Sorting:** click a column header (ascending → descending → original). Empty
+values always stay at the bottom. The default order comes from the *Sorting*
+section.
+
+**Column width:** drag the right edge of a column header, as in the native table.
+In analysis mode the widths last for the session; in edit mode they are saved in
+the object (*Columns → Column width* becomes *Fixed*). Set it back to *Auto* to
+reset.
 
 **Search:** every dimension header has a search icon, as in the native table. It
 lists all values of the field with their selection state (green selected, grey

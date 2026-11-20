@@ -77,6 +77,9 @@ define([
     var sortState = {};   // objectId -> { column, ascending }
     var searchState = {}; // objectId -> { dim, text } (open search box)
     var listModels = {};  // objectId -> { field, model, values }
+    var themeCache = {};  // appId -> styles read from the app theme
+    var sessionWidths = {}; // objectId -> column widths dragged in analysis mode
+    var resizeGuard = {};   // objectId -> time of the last resize (to skip the click that follows)
 
     function texts(lang) {
         return TEXTS[lang] || TEXTS.en;
@@ -234,6 +237,27 @@ define([
             return '-';
         }
         return cell.qText;
+    }
+
+    function isNullCell(cell) {
+        return !cell || cell.qIsNull || cell.qText === undefined || cell.qText === null ||
+            cell.qText === '' || cell.qText === '-';
+    }
+
+    // Sort two cells; empty values always go last, in both directions
+    function sortCells(a, b, ascending) {
+        var aNull = isNullCell(a);
+        var bNull = isNullCell(b);
+        if (aNull && bNull) {
+            return 0;
+        }
+        if (aNull) {
+            return 1;
+        }
+        if (bNull) {
+            return -1;
+        }
+        return compare(a, b) * (ascending ? 1 : -1);
     }
 
     function compare(a, b) {
@@ -422,6 +446,209 @@ define([
         input.setSelectionRange(input.value.length, input.value.length);
     }
 
+    // ---------- Presentation (styling) ----------
+
+    var PADDING = { compact: '2px 8px', medium: '4px 8px', spacious: '8px 10px' };
+    var THEME_TIMEOUT = 2000;
+
+    // Read the styles of the applied app theme once per app
+    function loadTheme(app) {
+        var key = app && app.id ? app.id : 'app';
+        if (themeCache[key]) {
+            return Promise.resolve(themeCache[key]);
+        }
+        if (!app || !app.theme || !app.theme.getApplied) {
+            themeCache[key] = {};
+            return Promise.resolve(themeCache[key]);
+        }
+        var themed = Promise.resolve(app.theme.getApplied()).then(function (theme) {
+            function style(base, path, attribute) {
+                try {
+                    return theme.getStyle(base, path, attribute);
+                } catch (e) {
+                    return undefined;
+                }
+            }
+            return {
+                headerColor: style('object.straightTable', 'header', 'color') || style('object', 'label.name', 'color'),
+                headerFontSize: style('object.straightTable', 'header', 'fontSize'),
+                bodyColor: style('object.straightTable', 'content', 'color') || style('', '', 'color'),
+                bodyFontSize: style('object.straightTable', 'content', 'fontSize'),
+                fontFamily: style('', '', 'fontFamily')
+            };
+        }, function () {
+            return {};
+        });
+        var timeout = new Promise(function (resolve) {
+            setTimeout(function () { resolve({}); }, THEME_TIMEOUT);
+        });
+        return Promise.race([themed, timeout]).then(function (styles) {
+            themeCache[key] = styles || {};
+            return themeCache[key];
+        });
+    }
+
+    // Colour picker value { index, color } -> CSS colour
+    function pickColour(value, fallback) {
+        return value && typeof value === 'object' && value.color ? value.color : fallback;
+    }
+
+    function pixels(value, fallback) {
+        var n = parseFloat(value);
+        return isNaN(n) || n <= 0 ? fallback : n + 'px';
+    }
+
+    // Light tint of a colour, for button state backgrounds
+    function tint(colour, alpha) {
+        var m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(colour || '');
+        if (m) {
+            return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + alpha + ')';
+        }
+        return 'color-mix(in srgb, ' + colour + ' ' + Math.round(alpha * 100) + '%, white)';
+    }
+
+    function rule(selector, declarations) {
+        var body = Object.keys(declarations).filter(function (k) {
+            return declarations[k] !== undefined && declarations[k] !== null && declarations[k] !== '';
+        }).map(function (k) {
+            return k + ':' + declarations[k];
+        }).join(';');
+        return body ? selector + '{' + body + '}' : '';
+    }
+
+    // CSS for one object, scoped to its own class
+    function buildCss(scope, p, theme) {
+        var css = [];
+        var headerCustom = p.headerStyle === 'custom';
+        var rowCustom = p.rowStyle === 'custom';
+        var grid = p.gridLines || 'horizontal';
+        var line = '1px solid ' + pickColour(p.borderColor, '#ECECEC');
+        var t = scope + ' .trt-table';
+
+        css.push(rule(t, { 'font-family': theme.fontFamily }));
+
+        css.push(rule(t + ' th', {
+            'color': headerCustom ? pickColour(p.headerColor, '#5F6368') : theme.headerColor,
+            'background-color': headerCustom ? pickColour(p.headerBackground, '#FFFFFF') : null,
+            'font-size': headerCustom ? pixels(p.headerFontSize, '12px') : theme.headerFontSize,
+            'font-weight': headerCustom ? (p.headerBold === false ? 'normal' : '600') : null,
+            'text-align': p.headerAlign && p.headerAlign !== 'auto' ? p.headerAlign + ' !important' : null,
+            'border-right': grid === 'both' ? line : null
+        }));
+
+        css.push(rule(t + ' td', {
+            'color': rowCustom ? pickColour(p.bodyColor, '#2B2B2B') : theme.bodyColor,
+            'font-size': rowCustom ? pixels(p.bodyFontSize, '12px') : theme.bodyFontSize,
+            'padding': PADDING[p.rowHeight] || PADDING.medium,
+            'border-bottom': grid === 'none' ? 'none' : line,
+            'border-right': grid === 'both' ? line : null
+        }));
+
+        if (p.wrap === false) {
+            css.push(rule(t + ' th,' + t + ' td', {
+                'white-space': 'nowrap',
+                'overflow': 'hidden',
+                'text-overflow': 'ellipsis'
+            }));
+        }
+
+        if (p.zebra) {
+            css.push(rule(t + ' tbody tr:nth-child(even) td', {
+                'background-color': pickColour(p.zebraColor, '#F7F7F7')
+            }));
+        }
+
+        // Hover: cells with a colour expression keep their colour (only darkened slightly)
+        css.push(rule(t + ' tbody tr:hover td:not([style*="background-color"])', {
+            'background-color': pickColour(p.hoverColor, '#F2F2F2')
+        }));
+
+        css.push(rule(scope + ' .trt-btn', { 'min-width': pixels(p.buttonWidth, '110px') }));
+
+        if (p.buttonColours === 'custom') {
+            var accent = pickColour(p.colorAccent, '#C8102E');
+            var running = pickColour(p.colorRunning, '#FFB81C');
+            var done = pickColour(p.colorDone, '#509E2F');
+            var failed = pickColour(p.colorFailed, '#C8102E');
+            css.push(rule(scope + ' .trt-btn:hover:not(:disabled)', { 'border-color': accent, 'color': accent }));
+            css.push(rule(scope + ' .trt-btn.trt-confirm,' + scope + ' .trt-btn.trt-confirm:hover:not(:disabled)', {
+                'background': accent, 'border-color': accent, 'color': '#FFFFFF'
+            }));
+            css.push(rule(scope + ' .trt-btn.trt-running', { 'background': tint(running, 0.25), 'border-color': running }));
+            css.push(rule(scope + ' .trt-btn.trt-done', { 'background': tint(done, 0.2), 'border-color': done }));
+            css.push(rule(scope + ' .trt-btn.trt-failed', { 'background': tint(failed, 0.12), 'border-color': failed, 'color': failed }));
+        }
+
+        return css.filter(Boolean).join('\n');
+    }
+
+    function parseWidths(text) {
+        var list = String(text || '').split(',').map(function (w) {
+            var n = parseInt(w, 10);
+            return isNaN(n) || n <= 0 ? null : n;
+        });
+        return list.some(function (w) { return w !== null; }) ? list : null;
+    }
+
+    function buttonColumnWidth(p) {
+        return (parseInt(p.buttonWidth, 10) || 110) + 20;
+    }
+
+    // Column widths: dragged widths (this session) or saved fixed widths win,
+    // otherwise auto or fit to content
+    function applyColumnWidths($table, p, visibleCount, hasButton, buttonLeft, widths) {
+        $table.find('colgroup').remove();
+        if (!widths) {
+            if (p.columnWidth === 'fit') {
+                $table.css({ 'table-layout': 'auto', 'width': 'auto' });
+            }
+            return;
+        }
+        var buttonWidth = buttonColumnWidth(p);
+        var $group = $('<colgroup></colgroup>');
+        var total = 0;
+        if (hasButton && buttonLeft) {
+            $group.append($('<col>').css('width', buttonWidth + 'px'));
+            total += buttonWidth;
+        }
+        for (var i = 0; i < visibleCount; i++) {
+            var w = widths[i] || 120;
+            $group.append($('<col class="trt-col-data">').css('width', w + 'px'));
+            total += w;
+        }
+        if (hasButton && !buttonLeft) {
+            $group.append($('<col>').css('width', buttonWidth + 'px'));
+            total += buttonWidth;
+        }
+        $table.prepend($group).css({ 'table-layout': 'fixed', 'width': total + 'px' });
+    }
+
+    // In edit mode, dragged widths are saved in the object (as fixed widths)
+    function saveWidths(backendApi, widths) {
+        backendApi.getProperties().then(function (props) {
+            props.props = props.props || {};
+            props.props.columnWidth = 'fixed';
+            props.props.columnWidths = widths.join(',');
+            return backendApi.setProperties(props);
+        });
+    }
+
+    // Border and shadow around the whole object (title included), like native objects
+    function applyObjectStyle($element, p) {
+        var $object = $element.closest('.qv-object');
+        if (!$object.length) {
+            $object = $element;
+        }
+        var width = parseInt(p.objectBorderWidth, 10);
+        var radius = parseInt(p.objectRadius, 10);
+        var styled = p.objectBorder || p.objectShadow;
+        $object.css({
+            'border': p.objectBorder ? (isNaN(width) || width < 1 ? 1 : width) + 'px solid ' + pickColour(p.objectBorderColor, '#BFBFBF') : '',
+            'border-radius': styled ? (isNaN(radius) || radius < 0 ? 4 : radius) + 'px' : '',
+            'box-shadow': p.objectShadow ? '0 1px 4px rgba(0, 0, 0, 0.18)' : ''
+        });
+    }
+
     // ---------- Rendering ----------
 
     function createButton(taskId, p, t) {
@@ -439,7 +666,7 @@ define([
         return $btn;
     }
 
-    function render($element, layout, rows, ctx) {
+    function render($element, layout, rows, ctx, theme) {
         var hc = layout.qHyperCube;
         var p = layout.props || {};
         var t = texts(p.language);
@@ -471,11 +698,13 @@ define([
         var sorted = rows;
         if (sort && sort.column < columns.length) {
             sorted = rows.slice().sort(function (a, b) {
-                return compare(a[sort.column], b[sort.column]) * (sort.ascending ? 1 : -1);
+                return sortCells(a[sort.column], b[sort.column], sort.ascending);
             });
         }
 
-        var $wrap = $('<div class="trt-wrap"></div>').toggleClass('trt-edit', ctx.editMode);
+        var scopeClass = 'trt-o-' + String(objectId).replace(/[^a-zA-Z0-9_-]/g, '');
+        var $wrap = $('<div class="trt-wrap"></div>').addClass(scopeClass).toggleClass('trt-edit', ctx.editMode);
+        $wrap.append($('<style></style>').text(buildCss('.' + scopeClass, p, theme || {})));
 
         if (!hasButton && parseInt(p.taskColumn, 10) > 0) {
             $wrap.append($('<div class="trt-note"></div>').text(t.invalidColumn + p.taskColumn));
@@ -489,7 +718,8 @@ define([
             $headerRow.append($buttonTh);
         }
         visible.forEach(function (c) {
-            var $th = $('<th></th>').append($('<span></span>').text(c.title)).attr('data-pos', c.pos);
+            var $th = $('<th></th>').append($('<span></span>').text(c.title)).attr('data-pos', c.pos)
+                .append('<span class="trt-resize"></span>');
             if (c.type === 'dim' && !ctx.editMode) {
                 $th.append($('<span class="trt-search lui-icon lui-icon--search"></span>')
                     .attr('data-dim', c.index).attr('title', t.search));
@@ -523,6 +753,9 @@ define([
             visible.forEach(function (c) {
                 var cell = row[c.pos];
                 var $td = $('<td></td>').text(cellText(cell));
+                if (p.wrap === false) {
+                    $td.attr('title', cellText(cell));
+                }
                 var colours = cellColours(cell);
 
                 if (c.type === 'measure') {
@@ -548,9 +781,46 @@ define([
             $body.append($tr);
         });
         $table.append($body);
+        var widths = sessionWidths[objectId] || (p.columnWidth === 'fixed' ? parseWidths(p.columnWidths) : null);
+        applyColumnWidths($table, p, visible.length, hasButton, buttonLeft, widths);
         $wrap.append($table);
 
         $element.css('position', 'relative').empty().append($wrap);
+        applyObjectStyle($element, p);
+
+        // Column resize: drag the right edge of a header (also in edit mode, where it is saved)
+        $wrap.on('mousedown', '.trt-resize', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $handle = $(this).addClass('trt-resizing');
+            var $ths = $table.find('thead th[data-pos]');
+            var index = $ths.index($handle.closest('th'));
+            var current = $ths.map(function () {
+                return Math.round($(this).outerWidth());
+            }).get();
+            applyColumnWidths($table, p, visible.length, hasButton, buttonLeft, current);
+            var $cols = $table.find('col.trt-col-data');
+            var extra = hasButton ? buttonColumnWidth(p) : 0;
+            var startX = e.pageX;
+            var startWidth = current[index];
+            var ns = '.trtresize' + scopeClass;
+
+            $(document).on('mousemove' + ns, function (ev) {
+                current[index] = Math.max(40, Math.round(startWidth + ev.pageX - startX));
+                $cols.eq(index).css('width', current[index] + 'px');
+                $table.css('width', (current.reduce(function (a, b) { return a + b; }, 0) + extra) + 'px');
+            }).on('mouseup' + ns, function () {
+                $(document).off(ns);
+                $handle.removeClass('trt-resizing');
+                resizeGuard[objectId] = Date.now();
+                sessionWidths[objectId] = current.slice();
+                if (ctx.editMode) {
+                    saveWidths(backendApi, current);
+                }
+            });
+        }).on('click', '.trt-resize', function (e) {
+            e.stopPropagation();
+        });
 
         // Edit mode: no interaction, so clicking the object selects it for editing (as in native objects)
         if (ctx.editMode) {
@@ -571,8 +841,11 @@ define([
             openSearch($element, $wrap, layout, rows, ctx, dim);
         });
 
-        // Header click: ascending -> descending -> original order
+        // Header click: ascending -> descending -> original order (empty values always last)
         $wrap.on('click', 'th[data-pos]', function () {
+            if (resizeGuard[objectId] && Date.now() - resizeGuard[objectId] < 300) {
+                return;
+            }
             var column = parseInt($(this).attr('data-pos'), 10);
             var current = sortState[objectId];
             if (!current || current.column !== column) {
@@ -582,7 +855,7 @@ define([
             } else {
                 delete sortState[objectId];
             }
-            render($element, layout, rows, ctx);
+            render($element, layout, rows, ctx, theme);
         });
 
         // Dimension cell click: select the value
@@ -627,7 +900,7 @@ define([
     // (background, text) stored as plain strings. Objects created with an
     // older version may hold an object instead of a string, which the engine
     // drops, so typed colour expressions disappeared.
-    var repaired = {};
+    var repaired = {};   // objectId -> true while a repair is in progress
 
     function normaliseAttributes(items) {
         var changed = false;
@@ -662,18 +935,23 @@ define([
         return changed;
     }
 
+    // Runs on every paint in edit mode, so a dimension or measure added a moment ago
+    // is fixed too. It only writes when something is wrong, so it does not loop.
     function repairProperties(backendApi, objectId) {
         if (repaired[objectId] || !backendApi.getProperties) {
             return;
         }
         repaired[objectId] = true;
         backendApi.getProperties().then(function (props) {
+            repaired[objectId] = false;
             var hcd = props.qHyperCubeDef || {};
             var changedDims = normaliseAttributes(hcd.qDimensions);
             var changedMeasures = normaliseAttributes(hcd.qMeasures);
             if (changedDims || changedMeasures) {
                 backendApi.setProperties(props);
             }
+        }, function () {
+            repaired[objectId] = false;
         });
     }
 
@@ -697,7 +975,20 @@ define([
                 confirm: true,
                 monitor: true,
                 selectOnClick: true,
-                language: 'en'
+                language: 'en',
+                headerStyle: 'theme',
+                headerAlign: 'auto',
+                rowStyle: 'theme',
+                rowHeight: 'medium',
+                zebra: false,
+                gridLines: 'horizontal',
+                columnWidth: 'auto',
+                columnWidths: '',
+                wrap: true,
+                buttonWidth: 110,
+                buttonColours: 'default',
+                objectBorder: false,
+                objectShadow: false
             },
             showTitles: true
         },
@@ -716,8 +1007,11 @@ define([
             if (ctx.editMode) {
                 repairProperties(ctx.backendApi, layout.qInfo.qId);
             }
-            var work = fetchRows(ctx.backendApi, layout.qHyperCube).then(function (rows) {
-                render($element, layout, rows, ctx);
+            var work = Promise.all([
+                loadTheme(ctx.app),
+                fetchRows(ctx.backendApi, layout.qHyperCube)
+            ]).then(function (results) {
+                render($element, layout, results[1], ctx, results[0]);
             });
             return qlik.Promise.resolve(work);
         },
