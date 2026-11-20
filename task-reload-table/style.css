@@ -256,3 +256,24 @@
 .trt-pop-clear:hover {
 	border-color: #2B2B2B;
 }
+
+/* Column resize handle on the right edge of each header */
+.trt-resize {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 6px;
+	height: 100%;
+	cursor: col-resize;
+	z-index: 2;
+}
+
+.trt-resize:hover,
+.trt-resize.trt-resizing {
+	background: rgba(0, 0, 0, 0.15);
+}
+
+/* Resizing also works in edit mode (widths are then saved) */
+.trt-wrap.trt-edit .trt-resize {
+	pointer-events: auto;
+}

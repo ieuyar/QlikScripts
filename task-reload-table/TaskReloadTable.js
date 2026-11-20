@@ -78,6 +78,8 @@ define([
     var searchState = {}; // objectId -> { dim, text } (open search box)
     var listModels = {};  // objectId -> { field, model, values }
     var themeCache = {};  // appId -> styles read from the app theme
+    var sessionWidths = {}; // objectId -> column widths dragged in analysis mode
+    var resizeGuard = {};   // objectId -> time of the last resize (to skip the click that follows)
 
     function texts(lang) {
         return TEXTS[lang] || TEXTS.en;
@@ -235,6 +237,27 @@ define([
             return '-';
         }
         return cell.qText;
+    }
+
+    function isNullCell(cell) {
+        return !cell || cell.qIsNull || cell.qText === undefined || cell.qText === null ||
+            cell.qText === '' || cell.qText === '-';
+    }
+
+    // Sort two cells; empty values always go last, in both directions
+    function sortCells(a, b, ascending) {
+        var aNull = isNullCell(a);
+        var bNull = isNullCell(b);
+        if (aNull && bNull) {
+            return 0;
+        }
+        if (aNull) {
+            return 1;
+        }
+        if (bNull) {
+            return -1;
+        }
+        return compare(a, b) * (ascending ? 1 : -1);
     }
 
     function compare(a, b) {
@@ -559,21 +582,29 @@ define([
         return css.filter(Boolean).join('\n');
     }
 
-    // Fixed column widths: <colgroup> plus a fixed table layout
-    function applyColumnWidths($table, p, visibleCount, hasButton, buttonLeft) {
-        var mode = p.columnWidth || 'auto';
-        if (mode === 'fit') {
-            $table.css('width', 'auto');
-            return;
-        }
-        if (mode !== 'fixed') {
-            return;
-        }
-        var widths = String(p.columnWidths || '').split(',').map(function (w) {
+    function parseWidths(text) {
+        var list = String(text || '').split(',').map(function (w) {
             var n = parseInt(w, 10);
-            return isNaN(n) || n <= 0 ? 120 : n;
+            return isNaN(n) || n <= 0 ? null : n;
         });
-        var buttonWidth = (parseInt(p.buttonWidth, 10) || 110) + 20;
+        return list.some(function (w) { return w !== null; }) ? list : null;
+    }
+
+    function buttonColumnWidth(p) {
+        return (parseInt(p.buttonWidth, 10) || 110) + 20;
+    }
+
+    // Column widths: dragged widths (this session) or saved fixed widths win,
+    // otherwise auto or fit to content
+    function applyColumnWidths($table, p, visibleCount, hasButton, buttonLeft, widths) {
+        $table.find('colgroup').remove();
+        if (!widths) {
+            if (p.columnWidth === 'fit') {
+                $table.css({ 'table-layout': 'auto', 'width': 'auto' });
+            }
+            return;
+        }
+        var buttonWidth = buttonColumnWidth(p);
         var $group = $('<colgroup></colgroup>');
         var total = 0;
         if (hasButton && buttonLeft) {
@@ -582,7 +613,7 @@ define([
         }
         for (var i = 0; i < visibleCount; i++) {
             var w = widths[i] || 120;
-            $group.append($('<col>').css('width', w + 'px'));
+            $group.append($('<col class="trt-col-data">').css('width', w + 'px'));
             total += w;
         }
         if (hasButton && !buttonLeft) {
@@ -590,6 +621,16 @@ define([
             total += buttonWidth;
         }
         $table.prepend($group).css({ 'table-layout': 'fixed', 'width': total + 'px' });
+    }
+
+    // In edit mode, dragged widths are saved in the object (as fixed widths)
+    function saveWidths(backendApi, widths) {
+        backendApi.getProperties().then(function (props) {
+            props.props = props.props || {};
+            props.props.columnWidth = 'fixed';
+            props.props.columnWidths = widths.join(',');
+            return backendApi.setProperties(props);
+        });
     }
 
     // ---------- Rendering ----------
@@ -641,7 +682,7 @@ define([
         var sorted = rows;
         if (sort && sort.column < columns.length) {
             sorted = rows.slice().sort(function (a, b) {
-                return compare(a[sort.column], b[sort.column]) * (sort.ascending ? 1 : -1);
+                return sortCells(a[sort.column], b[sort.column], sort.ascending);
             });
         }
 
@@ -661,7 +702,8 @@ define([
             $headerRow.append($buttonTh);
         }
         visible.forEach(function (c) {
-            var $th = $('<th></th>').append($('<span></span>').text(c.title)).attr('data-pos', c.pos);
+            var $th = $('<th></th>').append($('<span></span>').text(c.title)).attr('data-pos', c.pos)
+                .append('<span class="trt-resize"></span>');
             if (c.type === 'dim' && !ctx.editMode) {
                 $th.append($('<span class="trt-search lui-icon lui-icon--search"></span>')
                     .attr('data-dim', c.index).attr('title', t.search));
@@ -723,10 +765,45 @@ define([
             $body.append($tr);
         });
         $table.append($body);
-        applyColumnWidths($table, p, visible.length, hasButton, buttonLeft);
+        var widths = sessionWidths[objectId] || (p.columnWidth === 'fixed' ? parseWidths(p.columnWidths) : null);
+        applyColumnWidths($table, p, visible.length, hasButton, buttonLeft, widths);
         $wrap.append($table);
 
         $element.css('position', 'relative').empty().append($wrap);
+
+        // Column resize: drag the right edge of a header (also in edit mode, where it is saved)
+        $wrap.on('mousedown', '.trt-resize', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var $handle = $(this).addClass('trt-resizing');
+            var $ths = $table.find('thead th[data-pos]');
+            var index = $ths.index($handle.closest('th'));
+            var current = $ths.map(function () {
+                return Math.round($(this).outerWidth());
+            }).get();
+            applyColumnWidths($table, p, visible.length, hasButton, buttonLeft, current);
+            var $cols = $table.find('col.trt-col-data');
+            var extra = hasButton ? buttonColumnWidth(p) : 0;
+            var startX = e.pageX;
+            var startWidth = current[index];
+            var ns = '.trtresize' + scopeClass;
+
+            $(document).on('mousemove' + ns, function (ev) {
+                current[index] = Math.max(40, Math.round(startWidth + ev.pageX - startX));
+                $cols.eq(index).css('width', current[index] + 'px');
+                $table.css('width', (current.reduce(function (a, b) { return a + b; }, 0) + extra) + 'px');
+            }).on('mouseup' + ns, function () {
+                $(document).off(ns);
+                $handle.removeClass('trt-resizing');
+                resizeGuard[objectId] = Date.now();
+                sessionWidths[objectId] = current.slice();
+                if (ctx.editMode) {
+                    saveWidths(backendApi, current);
+                }
+            });
+        }).on('click', '.trt-resize', function (e) {
+            e.stopPropagation();
+        });
 
         // Edit mode: no interaction, so clicking the object selects it for editing (as in native objects)
         if (ctx.editMode) {
@@ -747,8 +824,11 @@ define([
             openSearch($element, $wrap, layout, rows, ctx, dim);
         });
 
-        // Header click: ascending -> descending -> original order
+        // Header click: ascending -> descending -> original order (empty values always last)
         $wrap.on('click', 'th[data-pos]', function () {
+            if (resizeGuard[objectId] && Date.now() - resizeGuard[objectId] < 300) {
+                return;
+            }
             var column = parseInt($(this).attr('data-pos'), 10);
             var current = sortState[objectId];
             if (!current || current.column !== column) {

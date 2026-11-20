@@ -71,8 +71,14 @@ expressions always win over the alternating row and hover colours.
 a *Text colour expression* text box (type the expression starting with `=`), e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.
 
-**Sorting:** click a column header (ascending → descending → original). The
-default order comes from the *Sorting* section.
+**Sorting:** click a column header (ascending → descending → original). Empty
+values always stay at the bottom. The default order comes from the *Sorting*
+section.
+
+**Column width:** drag the right edge of a column header, as in the native table.
+In analysis mode the widths last for the session; in edit mode they are saved in
+the object (*Columns → Column width* becomes *Fixed*). Set it back to *Auto* to
+reset.
 
 **Search:** every dimension header has a search icon, as in the native table. It
 lists all values of the field with their selection state (green selected, grey
