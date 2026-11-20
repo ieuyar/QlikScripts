@@ -633,6 +633,22 @@ define([
         });
     }
 
+    // Border and shadow around the whole object (title included), like native objects
+    function applyObjectStyle($element, p) {
+        var $object = $element.closest('.qv-object');
+        if (!$object.length) {
+            $object = $element;
+        }
+        var width = parseInt(p.objectBorderWidth, 10);
+        var radius = parseInt(p.objectRadius, 10);
+        var styled = p.objectBorder || p.objectShadow;
+        $object.css({
+            'border': p.objectBorder ? (isNaN(width) || width < 1 ? 1 : width) + 'px solid ' + pickColour(p.objectBorderColor, '#BFBFBF') : '',
+            'border-radius': styled ? (isNaN(radius) || radius < 0 ? 4 : radius) + 'px' : '',
+            'box-shadow': p.objectShadow ? '0 1px 4px rgba(0, 0, 0, 0.18)' : ''
+        });
+    }
+
     // ---------- Rendering ----------
 
     function createButton(taskId, p, t) {
@@ -770,6 +786,7 @@ define([
         $wrap.append($table);
 
         $element.css('position', 'relative').empty().append($wrap);
+        applyObjectStyle($element, p);
 
         // Column resize: drag the right edge of a header (also in edit mode, where it is saved)
         $wrap.on('mousedown', '.trt-resize', function (e) {
@@ -969,7 +986,9 @@ define([
                 columnWidths: '',
                 wrap: true,
                 buttonWidth: 110,
-                buttonColours: 'default'
+                buttonColours: 'default',
+                objectBorder: false,
+                objectShadow: false
             },
             showTitles: true
         },

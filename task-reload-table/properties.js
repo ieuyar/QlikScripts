@@ -49,6 +49,45 @@ define([], function () {
         type: "items",
         label: "Presentation",
         items: {
+            object: {
+                type: "items",
+                label: "Object",
+                items: {
+                    objectBorder: {
+                        type: "boolean",
+                        ref: "props.objectBorder",
+                        label: "Border",
+                        defaultValue: false
+                    },
+                    objectBorderColor: colour("props.objectBorderColor", "Border colour", "#BFBFBF", function (data) {
+                        return !!(data.props && data.props.objectBorder);
+                    }),
+                    objectBorderWidth: {
+                        type: "number",
+                        ref: "props.objectBorderWidth",
+                        label: "Border width (px)",
+                        defaultValue: 1,
+                        show: function (data) {
+                            return !!(data.props && data.props.objectBorder);
+                        }
+                    },
+                    objectRadius: {
+                        type: "number",
+                        ref: "props.objectRadius",
+                        label: "Corner radius (px)",
+                        defaultValue: 4,
+                        show: function (data) {
+                            return !!(data.props && (data.props.objectBorder || data.props.objectShadow));
+                        }
+                    },
+                    objectShadow: {
+                        type: "boolean",
+                        ref: "props.objectShadow",
+                        label: "Shadow",
+                        defaultValue: false
+                    }
+                }
+            },
             header: {
                 type: "items",
                 label: "Header",
@@ -328,7 +367,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.3.1",
+                        label: "Task Reload Table v1.4.0",
                         component: "text"
                     },
                     copyright: {
