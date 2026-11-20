@@ -621,6 +621,62 @@ define([
         }
     }
 
+    // ---------- Property repair ----------
+
+    // Make sure every dimension / measure has two attribute expressions
+    // (background, text) stored as plain strings. Objects created with an
+    // older version may hold an object instead of a string, which the engine
+    // drops, so typed colour expressions disappeared.
+    var repaired = {};
+
+    function normaliseAttributes(items) {
+        var changed = false;
+        (items || []).forEach(function (item) {
+            var attrs = item.qAttributeExpressions;
+            if (!Array.isArray(attrs)) {
+                var list = [];
+                if (attrs && typeof attrs === 'object') {
+                    Object.keys(attrs).forEach(function (k) {
+                        list[parseInt(k, 10)] = attrs[k];
+                    });
+                }
+                attrs = list;
+                changed = true;
+            }
+            for (var i = 0; i < 2; i++) {
+                var a = attrs[i];
+                if (!a || typeof a !== 'object') {
+                    attrs[i] = { qExpression: '' };
+                    changed = true;
+                } else if (a.qExpression && typeof a.qExpression === 'object') {
+                    var expr = a.qExpression.qStringExpression ? a.qExpression.qStringExpression.qExpr : (a.qExpression.qExpr || '');
+                    attrs[i] = { qExpression: expr || '' };
+                    changed = true;
+                } else if (typeof a.qExpression !== 'string') {
+                    a.qExpression = '';
+                    changed = true;
+                }
+            }
+            item.qAttributeExpressions = attrs;
+        });
+        return changed;
+    }
+
+    function repairProperties(backendApi, objectId) {
+        if (repaired[objectId] || !backendApi.getProperties) {
+            return;
+        }
+        repaired[objectId] = true;
+        backendApi.getProperties().then(function (props) {
+            var hcd = props.qHyperCubeDef || {};
+            var changedDims = normaliseAttributes(hcd.qDimensions);
+            var changedMeasures = normaliseAttributes(hcd.qMeasures);
+            if (changedDims || changedMeasures) {
+                backendApi.setProperties(props);
+            }
+        });
+    }
+
     // ---------- Extension definition ----------
 
     return {
@@ -657,6 +713,9 @@ define([
                 app: qlik.currApp(this),
                 editMode: isEditMode(this)
             };
+            if (ctx.editMode) {
+                repairProperties(ctx.backendApi, layout.qInfo.qId);
+            }
             var work = fetchRows(ctx.backendApi, layout.qHyperCube).then(function (rows) {
                 render($element, layout, rows, ctx);
             });

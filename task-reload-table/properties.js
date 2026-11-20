@@ -12,14 +12,14 @@ define([], function () {
             type: "string",
             ref: "qAttributeExpressions.0.qExpression",
             label: "Background colour expression",
-            expression: "always",
+            component: "expression",
             defaultValue: ""
         },
         text: {
             type: "string",
             ref: "qAttributeExpressions.1.qExpression",
             label: "Text colour expression",
-            expression: "always",
+            component: "expression",
             defaultValue: ""
         }
     };
@@ -131,7 +131,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.1.0",
+                        label: "Task Reload Table v1.1.1",
                         component: "text"
                     },
                     copyright: {
