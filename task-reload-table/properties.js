@@ -131,7 +131,15 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table",
+                        label: "Task Reload Table v1.1.0",
+                        component: "text"
+                    },
+                    copyright: {
+                        label: "© 2026 Etem Uyar · Etem Visuals",
+                        component: "text"
+                    },
+                    license: {
+                        label: "MIT License",
                         component: "text"
                     },
                     link: {

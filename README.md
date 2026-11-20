@@ -52,8 +52,8 @@ Progress is printed with a `[dump]` prefix.
 
 A Qlik Sense extension for client-managed sites: a table where every row has a
 **Reload** button that starts the QMC reload task in that row and shows its
-progress. Per-column colour expressions, sorting and selections work as in a
-native table. Download the zip from
+progress. Per-column colour expressions, header search, sorting and selections
+work as in a native table. Download the zip from
 [`task-reload-table/dist`](task-reload-table/dist/TaskReloadTable.zip) and import
 it in the QMC. Setup, options and the security rules it needs are in the
 [extension README](task-reload-table/README.md).
