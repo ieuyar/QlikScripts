@@ -58,6 +58,16 @@ a *Text colour expression*, like the native table, e.g.
 **Sorting:** click a column header (ascending → descending → original). The
 default order comes from the *Sorting* section.
 
+**Search:** every dimension header has a search icon, as in the native table. It
+lists all values of the field with their selection state (green selected, grey
+excluded). Type to filter, click a value to toggle it, press **Enter** to select
+all matches, **Esc** or click outside to close. For calculated dimensions it lists
+the values in the table.
+
+**Edit mode:** the table does not react to clicks while you edit the sheet (no
+selections, sorting, search or reloads), so clicking it selects the object, as
+with native objects.
+
 ## Security rules
 
 The button calls the QRS API with the logged-in user's session, so the user must
