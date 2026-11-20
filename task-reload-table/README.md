@@ -61,7 +61,7 @@ theme until you switch them to *Custom*.
 |---|---|
 | Header | Theme default or custom: font size, text colour, background colour, bold. Text alignment |
 | Rows | Theme default or custom: font size, text colour. Row height (compact / medium / spacious), alternating row colour, hover colour, grid lines (horizontal / both / none) and their colour |
-| Columns | Width: auto (fill the object), fit to content, or fixed px per column (e.g. `200,150,120` in visible column order). Text wrapping |
+| Columns | Width: auto (fill the object), fit to content, or fixed px per column (e.g. `200,150,120` in visible column order). Text wrapping: on wraps headers and cells onto more lines in narrow columns; off keeps one line and ends with "…" |
 | Button | Minimum width. Default or custom colours for hover / confirm, running, finished and failed |
 
 Colour pickers offer the theme palette and a custom colour. Cell colour

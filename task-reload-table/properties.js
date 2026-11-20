@@ -328,7 +328,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.3.0",
+                        label: "Task Reload Table v1.3.1",
                         component: "text"
                     },
                     copyright: {

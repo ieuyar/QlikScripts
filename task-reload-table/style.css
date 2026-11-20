@@ -22,7 +22,10 @@
 	text-align: left;
 	padding: 6px 8px;
 	border-bottom: 1px solid #BFBFBF;
-	white-space: nowrap;
+	vertical-align: bottom;
+	white-space: normal;
+	overflow-wrap: break-word;
+	overflow: hidden;
 	cursor: pointer;
 	user-select: none;
 }
@@ -38,6 +41,8 @@
 }
 
 .trt-table td {
+	overflow-wrap: break-word;
+	overflow: hidden;
 	padding: 4px 8px;
 	border-bottom: 1px solid #ECECEC;
 	vertical-align: middle;
