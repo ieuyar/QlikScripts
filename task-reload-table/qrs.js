@@ -1,7 +1,5 @@
 /*
 Task Reload Table - QRS calls
-The task start / execution monitoring approach is based on AppTaskReload
-by Jan Skibniewski (https://github.com/miguki/AppTaskReload, MIT).
 */
 
 define(["jquery"], function ($) {

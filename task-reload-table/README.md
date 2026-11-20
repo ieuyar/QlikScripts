@@ -61,9 +61,7 @@ default order comes from the *Sorting* section.
 ## Security rules
 
 The button calls the QRS API with the logged-in user's session, so the user must
-be allowed to start the task. As with
-[AppTaskReload](https://github.com/miguki/AppTaskReload), you typically need a rule
-that gives the users **Read** and **Update** on the reload tasks they may start
+be allowed to start the task. You typically need a rule that gives the users **Read** and **Update** on the reload tasks they may start
 (resource filter `ReloadTask_*`), and **Read** on `ExecutionResult_*` /
 `ExecutionSession_*` to monitor them. Test with a non-admin user before rolling out. Users with
 only an Analyzer license cannot start tasks. A **No access** label on the button
