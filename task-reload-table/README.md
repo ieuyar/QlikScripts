@@ -51,6 +51,22 @@ has an `id` and a child `app` object with the app ID.
 | Select on dimension cell click | on | Same as a native table |
 | Language of button texts | English | English / Türkçe |
 
+### Presentation
+
+The **Presentation** section works like the styling options of the native table.
+Everything starts from the current look, and header and row text follow the app
+theme until you switch them to *Custom*.
+
+| Group | Options |
+|---|---|
+| Header | Theme default or custom: font size, text colour, background colour, bold. Text alignment |
+| Rows | Theme default or custom: font size, text colour. Row height (compact / medium / spacious), alternating row colour, hover colour, grid lines (horizontal / both / none) and their colour |
+| Columns | Width: auto (fill the object), fit to content, or fixed px per column (e.g. `200,150,120` in visible column order). Text wrapping |
+| Button | Minimum width. Default or custom colours for hover / confirm, running, finished and failed |
+
+Colour pickers offer the theme palette and a custom colour. Cell colour
+expressions always win over the alternating row and hover colours.
+
 **Colours:** every dimension and measure has a *Background colour expression* and
 a *Text colour expression*, like the native table, e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.

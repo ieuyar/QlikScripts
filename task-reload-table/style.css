@@ -43,8 +43,9 @@
 	vertical-align: middle;
 }
 
-.trt-table tbody tr:hover td {
-	box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.03);
+/* Hover on cells with a colour expression: darken slightly, keep the colour */
+.trt-table tbody tr:hover td[style*="background-color"] {
+	box-shadow: inset 0 0 0 9999px rgba(0, 0, 0, 0.04);
 }
 
 .trt-table .trt-num {
