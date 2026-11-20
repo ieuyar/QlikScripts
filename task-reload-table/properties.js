@@ -12,15 +12,13 @@ define([], function () {
             type: "string",
             ref: "qAttributeExpressions.0.qExpression",
             label: "Background colour expression",
-            component: "expression",
-            defaultValue: ""
+            component: "expression"
         },
         text: {
             type: "string",
             ref: "qAttributeExpressions.1.qExpression",
             label: "Text colour expression",
-            component: "expression",
-            defaultValue: ""
+            component: "expression"
         }
     };
 
@@ -222,6 +220,20 @@ define([], function () {
         }
     };
 
+    // New dimensions / measures get both attribute expressions as a proper array,
+    // so the panel never has to create them from a sparse path
+    function withAttributes(item) {
+        if (!Array.isArray(item.qAttributeExpressions)) {
+            item.qAttributeExpressions = [];
+        }
+        for (var i = 0; i < 2; i++) {
+            if (!item.qAttributeExpressions[i]) {
+                item.qAttributeExpressions[i] = { qExpression: "" };
+            }
+        }
+        return item;
+    }
+
     return {
         type: "items",
         component: "accordion",
@@ -230,13 +242,19 @@ define([], function () {
                 uses: "dimensions",
                 min: 1,
                 max: 15,
-                items: columnColours
+                items: columnColours,
+                add: function (dimension) {
+                    return withAttributes(dimension);
+                }
             },
             measures: {
                 uses: "measures",
                 min: 0,
                 max: 10,
-                items: columnColours
+                items: columnColours,
+                add: function (measure) {
+                    return withAttributes(measure);
+                }
             },
             sorting: {
                 uses: "sorting"
@@ -330,7 +348,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.2.0",
+                        label: "Task Reload Table v1.2.1",
                         component: "text"
                     },
                     copyright: {
