@@ -12,12 +12,16 @@ define([], function () {
             type: "string",
             ref: "qAttributeExpressions.0.qExpression",
             label: "Background colour expression (e.g. =RGB(200,16,46))",
+            component: "textarea",
+            rows: 4,
             defaultValue: ""
         },
         text: {
             type: "string",
             ref: "qAttributeExpressions.1.qExpression",
             label: "Text colour expression (e.g. =If(x>0, Green()))",
+            component: "textarea",
+            rows: 4,
             defaultValue: ""
         }
     };
@@ -367,7 +371,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.4.0",
+                        label: "Task Reload Table v1.4.1",
                         component: "text"
                     },
                     copyright: {
