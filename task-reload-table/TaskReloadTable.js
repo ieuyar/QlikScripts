@@ -1,8 +1,6 @@
 /*
 Task Reload Table
 A table with a button on every row that starts the QMC reload task whose id is in that row.
-The task start / execution monitoring approach is based on AppTaskReload
-by Jan Skibniewski (https://github.com/miguki/AppTaskReload, MIT).
 */
 
 define([
