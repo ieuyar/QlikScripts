@@ -803,7 +803,7 @@ define([
     // (background, text) stored as plain strings. Objects created with an
     // older version may hold an object instead of a string, which the engine
     // drops, so typed colour expressions disappeared.
-    var repaired = {};
+    var repaired = {};   // objectId -> true while a repair is in progress
 
     function normaliseAttributes(items) {
         var changed = false;
@@ -838,18 +838,23 @@ define([
         return changed;
     }
 
+    // Runs on every paint in edit mode, so a dimension or measure added a moment ago
+    // is fixed too. It only writes when something is wrong, so it does not loop.
     function repairProperties(backendApi, objectId) {
         if (repaired[objectId] || !backendApi.getProperties) {
             return;
         }
         repaired[objectId] = true;
         backendApi.getProperties().then(function (props) {
+            repaired[objectId] = false;
             var hcd = props.qHyperCubeDef || {};
             var changedDims = normaliseAttributes(hcd.qDimensions);
             var changedMeasures = normaliseAttributes(hcd.qMeasures);
             if (changedDims || changedMeasures) {
                 backendApi.setProperties(props);
             }
+        }, function () {
+            repaired[objectId] = false;
         });
     }
 

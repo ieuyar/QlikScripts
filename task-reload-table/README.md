@@ -68,7 +68,7 @@ Colour pickers offer the theme palette and a custom colour. Cell colour
 expressions always win over the alternating row and hover colours.
 
 **Colours:** every dimension and measure has a *Background colour expression* and
-a *Text colour expression*, like the native table, e.g.
+a *Text colour expression* text box (type the expression starting with `=`), e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.
 
 **Sorting:** click a column header (ascending → descending → original). The

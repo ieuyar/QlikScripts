@@ -11,14 +11,14 @@ define([], function () {
         background: {
             type: "string",
             ref: "qAttributeExpressions.0.qExpression",
-            label: "Background colour expression",
-            component: "expression"
+            label: "Background colour expression (e.g. =RGB(200,16,46))",
+            defaultValue: ""
         },
         text: {
             type: "string",
             ref: "qAttributeExpressions.1.qExpression",
-            label: "Text colour expression",
-            component: "expression"
+            label: "Text colour expression (e.g. =If(x>0, Green()))",
+            defaultValue: ""
         }
     };
 
@@ -220,20 +220,6 @@ define([], function () {
         }
     };
 
-    // New dimensions / measures get both attribute expressions as a proper array,
-    // so the panel never has to create them from a sparse path
-    function withAttributes(item) {
-        if (!Array.isArray(item.qAttributeExpressions)) {
-            item.qAttributeExpressions = [];
-        }
-        for (var i = 0; i < 2; i++) {
-            if (!item.qAttributeExpressions[i]) {
-                item.qAttributeExpressions[i] = { qExpression: "" };
-            }
-        }
-        return item;
-    }
-
     return {
         type: "items",
         component: "accordion",
@@ -242,19 +228,13 @@ define([], function () {
                 uses: "dimensions",
                 min: 1,
                 max: 15,
-                items: columnColours,
-                add: function (dimension) {
-                    return withAttributes(dimension);
-                }
+                items: columnColours
             },
             measures: {
                 uses: "measures",
                 min: 0,
                 max: 10,
-                items: columnColours,
-                add: function (measure) {
-                    return withAttributes(measure);
-                }
+                items: columnColours
             },
             sorting: {
                 uses: "sorting"
@@ -348,7 +328,7 @@ define([], function () {
                 type: "items",
                 items: {
                     name: {
-                        label: "Task Reload Table v1.2.1",
+                        label: "Task Reload Table v1.2.2",
                         component: "text"
                     },
                     copyright: {
