@@ -78,10 +78,6 @@ means the rule is missing for that user or task.
   with an *Execute automation* action instead.
 - Up to 15 dimensions, 10 measures and 5,000 rows.
 
-## Credits
-
-The task start and monitoring approach is based on
-[AppTaskReload](https://github.com/miguki/AppTaskReload) by Jan Skibniewski (MIT).
 
 ## License
 
