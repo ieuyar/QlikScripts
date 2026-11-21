@@ -26,7 +26,7 @@ define([
             notFound: 'Task not found',
             couldNotStart: 'Could not start',
             timedOut: 'Monitoring timed out',
-            invalidColumn: 'Invalid task ID column number: ',
+            invalidColumn: 'Task ID column not found: ',
             search: 'Search',
             clearSelection: 'Clear selection',
             noMatch: 'No match',
@@ -47,7 +47,7 @@ define([
             notFound: 'Task bulunamadı',
             couldNotStart: 'Başlatılamadı',
             timedOut: 'İzleme süresi doldu',
-            invalidColumn: 'Geçersiz task ID kolon numarası: ',
+            invalidColumn: 'Task ID kolonu bulunamadı: ',
             search: 'Ara',
             clearSelection: 'Seçimi temizle',
             noMatch: 'Eşleşme yok',
@@ -226,9 +226,13 @@ define([
 
     function cellColours(cell) {
         var values = cell && cell.qAttrExps && cell.qAttrExps.qValues ? cell.qAttrExps.qValues : [];
+        var style = String(values[2] && values[2].qText ? values[2].qText : '').toLowerCase();
         return {
             background: toCss(values[0]),
-            text: toCss(values[1])
+            text: toCss(values[1]),
+            bold: /<b>|bold/.test(style),
+            italic: /<i>|italic/.test(style),
+            underline: /<u>|underline/.test(style)
         };
     }
 
@@ -666,6 +670,53 @@ define([
         return $btn;
     }
 
+    // Task ID column by field name / column label (robust when columns are added or moved).
+    // A plain number is still accepted for older objects (1 = first column).
+    // Tolerates "=", "Only(...)" and [brackets]: "=Only([KOK TASK ID])" -> KOK TASK ID
+    function cleanName(value) {
+        var s = String(value).trim().replace(/^=\s*/, '');
+        var m = /^only\s*\(\s*(.*?)\s*\)$/i.exec(s);
+        if (m) {
+            s = m[1];
+        }
+        return s.replace(/^\[(.*)\]$/, '$1').trim().toLowerCase();
+    }
+
+    function findTaskColumn(setting, columns, hc) {
+        if (setting === undefined || setting === null) {
+            return -1;
+        }
+        var raw = String(setting).trim();
+        if (raw === '' || raw === '0') {
+            return -1;
+        }
+        if (/^\d+$/.test(raw)) {
+            var n = parseInt(raw, 10) - 1;
+            return n >= 0 && n < columns.length ? n : -1;
+        }
+        var name = cleanName(raw);
+        var found = -1;
+        columns.forEach(function (c) {
+            if (found > -1) {
+                return;
+            }
+            var candidates = [c.title];
+            if (c.type === 'dim') {
+                var info = hc.qDimensionInfo[c.index] || {};
+                (info.qGroupFieldDefs || []).forEach(function (f) {
+                    candidates.push(f);
+                });
+            }
+            for (var i = 0; i < candidates.length; i++) {
+                if (candidates[i] !== undefined && cleanName(candidates[i]) === name) {
+                    found = c.pos;
+                    return;
+                }
+            }
+        });
+        return found;
+    }
+
     function render($element, layout, rows, ctx, theme) {
         var hc = layout.qHyperCube;
         var p = layout.props || {};
@@ -682,10 +733,7 @@ define([
             columns.push({ type: 'measure', index: i, title: m.qFallbackTitle, pos: columns.length });
         });
 
-        var taskColumn = parseInt(p.taskColumn, 10) - 1;
-        if (!(taskColumn >= 0 && taskColumn < columns.length)) {
-            taskColumn = -1;
-        }
+        var taskColumn = findTaskColumn(p.taskColumn, columns, hc);
         var hasButton = taskColumn > -1;
         var buttonLeft = p.buttonPosition === 'left';
 
@@ -706,7 +754,7 @@ define([
         var $wrap = $('<div class="trt-wrap"></div>').addClass(scopeClass).toggleClass('trt-edit', ctx.editMode);
         $wrap.append($('<style></style>').text(buildCss('.' + scopeClass, p, theme || {})));
 
-        if (!hasButton && parseInt(p.taskColumn, 10) > 0) {
+        if (!hasButton && String(p.taskColumn == null ? '' : p.taskColumn).trim() !== '' && String(p.taskColumn).trim() !== '0') {
             $wrap.append($('<div class="trt-note"></div>').text(t.invalidColumn + p.taskColumn));
         }
 
@@ -766,6 +814,15 @@ define([
                 }
                 if (colours.text) {
                     $td.css('color', colours.text);
+                }
+                if (colours.bold) {
+                    $td.css('font-weight', 'bold');
+                }
+                if (colours.italic) {
+                    $td.css('font-style', 'italic');
+                }
+                if (colours.underline) {
+                    $td.css('text-decoration', 'underline');
                 }
                 if (c.type === 'dim' && p.selectOnClick !== false && cell && cell.qElemNumber >= 0) {
                     $td.addClass('trt-selectable')
@@ -894,64 +951,127 @@ define([
         }
     }
 
-    // ---------- Property repair ----------
+    // ---------- Property sync ----------
 
-    // Make sure every dimension / measure has two attribute expressions
-    // (background, text) stored as plain strings. Objects created with an
-    // older version may hold an object instead of a string, which the engine
-    // drops, so typed colour expressions disappeared.
-    var repaired = {};   // objectId -> true while a repair is in progress
+    // The property panel edits qDef.trtBackground / trtText / trtStyle with the
+    // normal fx editor. The engine only evaluates per row what is in
+    // qAttributeExpressions (as plain strings), so the extension copies the
+    // panel values there. Objects from older versions (expressions only in
+    // qAttributeExpressions) are migrated once into the panel fields.
+    // Only the changed paths are patched, so a panel edit is never overwritten.
+    var ATTR_KEYS = ['trtBackground', 'trtText', 'trtStyle'];
+    var syncBusy = {};   // objectId -> true while a sync is in progress
+    var syncSeen = {};   // objectId|path|value -> already patched once (no loops)
 
-    function normaliseAttributes(items) {
-        var changed = false;
-        (items || []).forEach(function (item) {
-            var attrs = item.qAttributeExpressions;
-            if (!Array.isArray(attrs)) {
-                var list = [];
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach(function (k) {
-                        list[parseInt(k, 10)] = attrs[k];
-                    });
-                }
-                attrs = list;
-                changed = true;
+    function exprText(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (typeof value === 'object') {
+            if (value.qStringExpression) {
+                return value.qStringExpression.qExpr || '';
             }
-            for (var i = 0; i < 2; i++) {
-                var a = attrs[i];
-                if (!a || typeof a !== 'object') {
-                    attrs[i] = { qExpression: '' };
-                    changed = true;
-                } else if (a.qExpression && typeof a.qExpression === 'object') {
-                    var expr = a.qExpression.qStringExpression ? a.qExpression.qStringExpression.qExpr : (a.qExpression.qExpr || '');
-                    attrs[i] = { qExpression: expr || '' };
-                    changed = true;
-                } else if (typeof a.qExpression !== 'string') {
-                    a.qExpression = '';
-                    changed = true;
-                }
+            if (value.qValueExpression) {
+                return value.qValueExpression.qExpr || '';
             }
-            item.qAttributeExpressions = attrs;
-        });
-        return changed;
+            if (value.qExpr !== undefined) {
+                return value.qExpr || '';
+            }
+        }
+        return '';
     }
 
-    // Runs on every paint in edit mode, so a dimension or measure added a moment ago
-    // is fixed too. It only writes when something is wrong, so it does not loop.
-    function repairProperties(backendApi, objectId) {
-        if (repaired[objectId] || !backendApi.getProperties) {
+    function currentAttributes(item) {
+        var attrs = item.qAttributeExpressions;
+        var list = [];
+        if (Array.isArray(attrs)) {
+            list = attrs;
+        } else if (attrs && typeof attrs === 'object') {
+            Object.keys(attrs).forEach(function (k) {
+                list[parseInt(k, 10)] = attrs[k];
+            });
+        }
+        return [0, 1, 2].map(function (i) {
+            return list[i] && typeof list[i] === 'object' ? exprText(list[i].qExpression) : '';
+        });
+    }
+
+    function addPatch(objectId, path, value, patches, state) {
+        var key = objectId + '|' + path + '|' + value + '|' + (state || '');
+        if (syncSeen[key]) {
             return;
         }
-        repaired[objectId] = true;
-        backendApi.getProperties().then(function (props) {
-            repaired[objectId] = false;
-            var hcd = props.qHyperCubeDef || {};
-            var changedDims = normaliseAttributes(hcd.qDimensions);
-            var changedMeasures = normaliseAttributes(hcd.qMeasures);
-            if (changedDims || changedMeasures) {
-                backendApi.setProperties(props);
+        syncSeen[key] = true;
+        patches.push({ qOp: 'add', qPath: path, qValue: value });
+    }
+
+    function collectPatches(items, path, objectId, patches) {
+        (items || []).forEach(function (item, i) {
+            item = item || {};
+            var base = path + '/' + i;
+            var def = item.qDef && typeof item.qDef === 'object' ? item.qDef : null;
+            var current = currentAttributes(item);
+            var panelSet = def && ATTR_KEYS.some(function (k) { return def[k] !== undefined; });
+
+            if (!panelSet) {
+                // Older object: move existing expressions into the panel fields
+                if (current.join('') === '') {
+                    return;
+                }
+                var migrated = {};
+                ATTR_KEYS.forEach(function (k, n) {
+                    migrated[k] = current[n];
+                });
+                if (def) {
+                    ATTR_KEYS.forEach(function (k) {
+                        addPatch(objectId, base + '/qDef/' + k, JSON.stringify(migrated[k]), patches);
+                    });
+                } else {
+                    addPatch(objectId, base + '/qDef', JSON.stringify(migrated), patches);
+                }
+                return;
             }
+
+            var wanted = ATTR_KEYS.map(function (k) { return exprText(def[k]); });
+            var attrsOk = Array.isArray(item.qAttributeExpressions) && item.qAttributeExpressions.length >= 3 &&
+                item.qAttributeExpressions.every(function (a) { return a && typeof a.qExpression === 'string'; });
+            if (attrsOk && wanted.join('\u0001') === current.join('\u0001')) {
+                return;
+            }
+            var list = wanted.map(function (w) { return { qExpression: w }; });
+            addPatch(objectId, base + '/qAttributeExpressions', JSON.stringify(list), patches, JSON.stringify(item.qAttributeExpressions || null));
+        });
+    }
+
+    // Runs on paint in edit mode, so changes from the panel are applied right away.
+    // It only writes what differs, and never the same patch twice.
+    function repairProperties(backendApi, objectId) {
+        if (syncBusy[objectId] || !backendApi.getProperties) {
+            return;
+        }
+        syncBusy[objectId] = true;
+        backendApi.getProperties().then(function (props) {
+            var hcd = props.qHyperCubeDef || {};
+            var patches = [];
+            collectPatches(hcd.qDimensions, '/qHyperCubeDef/qDimensions', objectId, patches);
+            collectPatches(hcd.qMeasures, '/qHyperCubeDef/qMeasures', objectId, patches);
+            if (!patches.length) {
+                return null;
+            }
+            if (backendApi.applyPatches) {
+                return backendApi.applyPatches(patches, false);
+            }
+            if (backendApi.model && backendApi.model.applyPatches) {
+                return backendApi.model.applyPatches(patches, false);
+            }
+            return null;
+        }).then(function () {
+            syncBusy[objectId] = false;
         }, function () {
-            repaired[objectId] = false;
+            syncBusy[objectId] = false;
         });
     }
 
@@ -967,7 +1087,7 @@ define([
                 qSuppressMissing: false
             },
             props: {
-                taskColumn: 0,
+                taskColumn: '',
                 hideTaskColumn: true,
                 buttonHeader: '',
                 buttonLabel: '',

@@ -29,8 +29,8 @@ without opening the QMC.
 2. Add a column that returns the **reload task ID** for the row. A measure such
    as `=Only([TASK ID])` works best: if a row has more than one task, `Only()`
    returns nothing and the row shows **No task** instead of starting the wrong one.
-3. Under **Reload button → Task ID column**, enter that column's number.
-   Dimensions are counted first, then measures (e.g. 4 dimensions + 2 measures:
+3. Under **Reload button → Task ID column**, enter that column's field name or label (for example `KOK TASK ID`). Because the column is found by name, adding or moving columns does not break the buttons. A column number still works for older objects.
+   With a number, dimensions are counted first, then measures (e.g. 4 dimensions + 2 measures:
    the second measure is column 6). The column is hidden by default.
 
 Getting task IDs into your data model: load `/qrs/task/full` through the
@@ -41,7 +41,7 @@ has an `id` and a child `app` object with the app ID.
 
 | Option | Default | |
 |---|---|---|
-| Task ID column | 0 (no buttons) | Column number holding the task ID |
+| Task ID column | empty (no buttons) | Field name or column label holding the task ID; a number (1 = first column) also works |
 | Hide the task ID column | on | |
 | Button column header | empty | |
 | Button label | language default | |
@@ -68,9 +68,12 @@ theme until you switch them to *Custom*.
 Colour pickers offer the theme palette and a custom colour. Cell colour
 expressions always win over the alternating row and hover colours.
 
-**Colours:** every dimension and measure has a *Background colour expression* and
-a *Text colour expression* text box (type the expression starting with `=`), e.g.
+**Colours and text style:** every dimension and measure has a *Background colour
+expression*, a *Text colour expression* and a *Text style expression*, each with the
+normal fx expression editor, e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.
+The text style expression returns `<B>` (bold), `<I>` (italic) or `<U>` (underline),
+combinable, e.g. `='<B>'` or `=If([Status] = 'Failed', '<B><I>')`.
 
 **Sorting:** click a column header (ascending → descending → original). Empty
 values always stay at the bottom. The default order comes from the *Sorting*
