@@ -30,7 +30,7 @@ without opening the QMC.
    as `=Only([TASK ID])` works best: if a row has more than one task, `Only()`
    returns nothing and the row shows **No task** instead of starting the wrong one.
 3. Under **Reload button → Task ID column**, enter that column's field name or label (for example `KOK TASK ID`). Because the column is found by name, adding or moving columns does not break the buttons. A column number still works for older objects.
-   Dimensions are counted first, then measures (e.g. 4 dimensions + 2 measures:
+   With a number, dimensions are counted first, then measures (e.g. 4 dimensions + 2 measures:
    the second measure is column 6). The column is hidden by default.
 
 Getting task IDs into your data model: load `/qrs/task/full` through the
