@@ -29,7 +29,7 @@ without opening the QMC.
 2. Add a column that returns the **reload task ID** for the row. A measure such
    as `=Only([TASK ID])` works best: if a row has more than one task, `Only()`
    returns nothing and the row shows **No task** instead of starting the wrong one.
-3. Under **Reload button → Task ID column**, enter that column's number.
+3. Under **Reload button → Task ID column**, enter that column's field name or label (for example `KOK TASK ID`). Because the column is found by name, adding or moving columns does not break the buttons. A column number still works for older objects.
    Dimensions are counted first, then measures (e.g. 4 dimensions + 2 measures:
    the second measure is column 6). The column is hidden by default.
 
@@ -41,7 +41,7 @@ has an `id` and a child `app` object with the app ID.
 
 | Option | Default | |
 |---|---|---|
-| Task ID column | 0 (no buttons) | Column number holding the task ID |
+| Task ID column | empty (no buttons) | Field name or column label holding the task ID; a number (1 = first column) also works |
 | Hide the task ID column | on | |
 | Button column header | empty | |
 | Button label | language default | |

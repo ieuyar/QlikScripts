@@ -26,7 +26,7 @@ define([
             notFound: 'Task not found',
             couldNotStart: 'Could not start',
             timedOut: 'Monitoring timed out',
-            invalidColumn: 'Invalid task ID column number: ',
+            invalidColumn: 'Task ID column not found: ',
             search: 'Search',
             clearSelection: 'Clear selection',
             noMatch: 'No match',
@@ -47,7 +47,7 @@ define([
             notFound: 'Task bulunamadı',
             couldNotStart: 'Başlatılamadı',
             timedOut: 'İzleme süresi doldu',
-            invalidColumn: 'Geçersiz task ID kolon numarası: ',
+            invalidColumn: 'Task ID kolonu bulunamadı: ',
             search: 'Ara',
             clearSelection: 'Seçimi temizle',
             noMatch: 'Eşleşme yok',
@@ -666,6 +666,53 @@ define([
         return $btn;
     }
 
+    // Task ID column by field name / column label (robust when columns are added or moved).
+    // A plain number is still accepted for older objects (1 = first column).
+    // Tolerates "=", "Only(...)" and [brackets]: "=Only([KOK TASK ID])" -> KOK TASK ID
+    function cleanName(value) {
+        var s = String(value).trim().replace(/^=\s*/, '');
+        var m = /^only\s*\(\s*(.*?)\s*\)$/i.exec(s);
+        if (m) {
+            s = m[1];
+        }
+        return s.replace(/^\[(.*)\]$/, '$1').trim().toLowerCase();
+    }
+
+    function findTaskColumn(setting, columns, hc) {
+        if (setting === undefined || setting === null) {
+            return -1;
+        }
+        var raw = String(setting).trim();
+        if (raw === '' || raw === '0') {
+            return -1;
+        }
+        if (/^\d+$/.test(raw)) {
+            var n = parseInt(raw, 10) - 1;
+            return n >= 0 && n < columns.length ? n : -1;
+        }
+        var name = cleanName(raw);
+        var found = -1;
+        columns.forEach(function (c) {
+            if (found > -1) {
+                return;
+            }
+            var candidates = [c.title];
+            if (c.type === 'dim') {
+                var info = hc.qDimensionInfo[c.index] || {};
+                (info.qGroupFieldDefs || []).forEach(function (f) {
+                    candidates.push(f);
+                });
+            }
+            for (var i = 0; i < candidates.length; i++) {
+                if (candidates[i] !== undefined && cleanName(candidates[i]) === name) {
+                    found = c.pos;
+                    return;
+                }
+            }
+        });
+        return found;
+    }
+
     function render($element, layout, rows, ctx, theme) {
         var hc = layout.qHyperCube;
         var p = layout.props || {};
@@ -682,10 +729,7 @@ define([
             columns.push({ type: 'measure', index: i, title: m.qFallbackTitle, pos: columns.length });
         });
 
-        var taskColumn = parseInt(p.taskColumn, 10) - 1;
-        if (!(taskColumn >= 0 && taskColumn < columns.length)) {
-            taskColumn = -1;
-        }
+        var taskColumn = findTaskColumn(p.taskColumn, columns, hc);
         var hasButton = taskColumn > -1;
         var buttonLeft = p.buttonPosition === 'left';
 
@@ -706,7 +750,7 @@ define([
         var $wrap = $('<div class="trt-wrap"></div>').addClass(scopeClass).toggleClass('trt-edit', ctx.editMode);
         $wrap.append($('<style></style>').text(buildCss('.' + scopeClass, p, theme || {})));
 
-        if (!hasButton && parseInt(p.taskColumn, 10) > 0) {
+        if (!hasButton && String(p.taskColumn == null ? '' : p.taskColumn).trim() !== '' && String(p.taskColumn).trim() !== '0') {
             $wrap.append($('<div class="trt-note"></div>').text(t.invalidColumn + p.taskColumn));
         }
 
@@ -967,7 +1011,7 @@ define([
                 qSuppressMissing: false
             },
             props: {
-                taskColumn: 0,
+                taskColumn: '',
                 hideTaskColumn: true,
                 buttonHeader: '',
                 buttonLabel: '',

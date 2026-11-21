@@ -287,10 +287,10 @@ define([], function () {
                 label: "Reload button",
                 items: {
                     taskColumn: {
-                        type: "number",
+                        type: "string",
                         ref: "props.taskColumn",
-                        label: "Task ID column (1 = first column; dimensions are counted before measures)",
-                        defaultValue: 0
+                        label: "Task ID column: field name or column label (e.g. KOK TASK ID). A number still works (1 = first column)",
+                        defaultValue: ""
                     },
                     hideTaskColumn: {
                         type: "boolean",
