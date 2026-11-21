@@ -944,58 +944,83 @@ define([
     // (background, text) stored as plain strings. Objects created with an
     // older version may hold an object instead of a string, which the engine
     // drops, so typed colour expressions disappeared.
-    var repaired = {};   // objectId -> true while a repair is in progress
+    //
+    // Only the broken item is patched (applyPatches on that one path). Writing
+    // the whole property tree back could overwrite an edit the property panel
+    // was saving at the same moment, so colour changes seemed to be ignored.
+    var repairBusy = {};   // objectId -> true while a repair is in progress
+    var repairSeen = {};   // objectId|path|state -> already patched once (no loops)
 
-    function normaliseAttributes(items) {
-        var changed = false;
-        (items || []).forEach(function (item) {
-            var attrs = item.qAttributeExpressions;
-            if (!Array.isArray(attrs)) {
-                var list = [];
-                if (attrs && typeof attrs === 'object') {
-                    Object.keys(attrs).forEach(function (k) {
-                        list[parseInt(k, 10)] = attrs[k];
-                    });
-                }
-                attrs = list;
-                changed = true;
+    function fixedAttributes(item) {
+        var attrs = item.qAttributeExpressions;
+        var list = [];
+        if (Array.isArray(attrs)) {
+            list = attrs.slice();
+        } else if (attrs && typeof attrs === 'object') {
+            Object.keys(attrs).forEach(function (k) {
+                list[parseInt(k, 10)] = attrs[k];
+            });
+        }
+        var broken = !Array.isArray(attrs);
+        for (var i = 0; i < 2; i++) {
+            var a = list[i];
+            if (!a || typeof a !== 'object') {
+                list[i] = { qExpression: '' };
+                broken = true;
+            } else if (a.qExpression && typeof a.qExpression === 'object') {
+                var expr = a.qExpression.qStringExpression ? a.qExpression.qStringExpression.qExpr : (a.qExpression.qExpr || '');
+                list[i] = { qExpression: expr || '' };
+                broken = true;
+            } else if (a.qExpression !== undefined && typeof a.qExpression !== 'string') {
+                list[i] = { qExpression: '' };
+                broken = true;
             }
-            for (var i = 0; i < 2; i++) {
-                var a = attrs[i];
-                if (!a || typeof a !== 'object') {
-                    attrs[i] = { qExpression: '' };
-                    changed = true;
-                } else if (a.qExpression && typeof a.qExpression === 'object') {
-                    var expr = a.qExpression.qStringExpression ? a.qExpression.qStringExpression.qExpr : (a.qExpression.qExpr || '');
-                    attrs[i] = { qExpression: expr || '' };
-                    changed = true;
-                } else if (typeof a.qExpression !== 'string') {
-                    a.qExpression = '';
-                    changed = true;
-                }
-            }
-            item.qAttributeExpressions = attrs;
-        });
-        return changed;
+        }
+        return broken ? list : null;
     }
 
-    // Runs on every paint in edit mode, so a dimension or measure added a moment ago
-    // is fixed too. It only writes when something is wrong, so it does not loop.
+    function collectPatches(items, path, objectId, patches) {
+        (items || []).forEach(function (item, i) {
+            var list = fixedAttributes(item || {});
+            if (!list) {
+                return;
+            }
+            var itemPath = path + '/' + i + '/qAttributeExpressions';
+            var key = objectId + '|' + itemPath + '|' + JSON.stringify(item.qAttributeExpressions || null);
+            if (repairSeen[key]) {
+                return;
+            }
+            repairSeen[key] = true;
+            patches.push({ qOp: 'add', qPath: itemPath, qValue: JSON.stringify(list) });
+        });
+    }
+
+    // Runs on paint in edit mode, so a dimension or measure added a moment ago
+    // is fixed too. It only writes when something is wrong, and never the same fix twice.
     function repairProperties(backendApi, objectId) {
-        if (repaired[objectId] || !backendApi.getProperties) {
+        if (repairBusy[objectId] || !backendApi.getProperties) {
             return;
         }
-        repaired[objectId] = true;
+        repairBusy[objectId] = true;
         backendApi.getProperties().then(function (props) {
-            repaired[objectId] = false;
             var hcd = props.qHyperCubeDef || {};
-            var changedDims = normaliseAttributes(hcd.qDimensions);
-            var changedMeasures = normaliseAttributes(hcd.qMeasures);
-            if (changedDims || changedMeasures) {
-                backendApi.setProperties(props);
+            var patches = [];
+            collectPatches(hcd.qDimensions, '/qHyperCubeDef/qDimensions', objectId, patches);
+            collectPatches(hcd.qMeasures, '/qHyperCubeDef/qMeasures', objectId, patches);
+            if (!patches.length) {
+                return null;
             }
+            if (backendApi.applyPatches) {
+                return backendApi.applyPatches(patches, false);
+            }
+            if (backendApi.model && backendApi.model.applyPatches) {
+                return backendApi.model.applyPatches(patches, false);
+            }
+            return null;
+        }).then(function () {
+            repairBusy[objectId] = false;
         }, function () {
-            repaired[objectId] = false;
+            repairBusy[objectId] = false;
         });
     }
 
