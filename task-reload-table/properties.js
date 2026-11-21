@@ -5,23 +5,30 @@ Task Reload Table - property panel
 define([], function () {
     'use strict';
 
-    // Per-column colour expressions, same idea as the native table
-    // attribute 0 = background colour, attribute 1 = text colour
+    // Per-column expressions, same idea as the native table.
+    // Edited here with the normal fx editor (stored in qDef.trt*); the extension
+    // copies them into the attribute expressions the engine evaluates per row:
+    // attribute 0 = background colour, 1 = text colour, 2 = text style
     var columnColours = {
         background: {
             type: "string",
-            ref: "qAttributeExpressions.0.qExpression",
-            label: "Background colour expression (e.g. =RGB(200,16,46))",
-            component: "textarea",
-            rows: 4,
+            ref: "qDef.trtBackground",
+            label: "Background colour expression",
+            expression: "optional",
             defaultValue: ""
         },
         text: {
             type: "string",
-            ref: "qAttributeExpressions.1.qExpression",
-            label: "Text colour expression (e.g. =If(x>0, Green()))",
-            component: "textarea",
-            rows: 4,
+            ref: "qDef.trtText",
+            label: "Text colour expression",
+            expression: "optional",
+            defaultValue: ""
+        },
+        style: {
+            type: "string",
+            ref: "qDef.trtStyle",
+            label: "Text style expression (<B> bold, <I> italic, <U> underline)",
+            expression: "optional",
             defaultValue: ""
         }
     };

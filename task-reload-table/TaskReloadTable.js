@@ -226,9 +226,13 @@ define([
 
     function cellColours(cell) {
         var values = cell && cell.qAttrExps && cell.qAttrExps.qValues ? cell.qAttrExps.qValues : [];
+        var style = String(values[2] && values[2].qText ? values[2].qText : '').toLowerCase();
         return {
             background: toCss(values[0]),
-            text: toCss(values[1])
+            text: toCss(values[1]),
+            bold: /<b>|bold/.test(style),
+            italic: /<i>|italic/.test(style),
+            underline: /<u>|underline/.test(style)
         };
     }
 
@@ -811,6 +815,15 @@ define([
                 if (colours.text) {
                     $td.css('color', colours.text);
                 }
+                if (colours.bold) {
+                    $td.css('font-weight', 'bold');
+                }
+                if (colours.italic) {
+                    $td.css('font-style', 'italic');
+                }
+                if (colours.underline) {
+                    $td.css('text-decoration', 'underline');
+                }
                 if (c.type === 'dim' && p.selectOnClick !== false && cell && cell.qElemNumber >= 0) {
                     $td.addClass('trt-selectable')
                         .attr('data-dim', c.index)
@@ -938,70 +951,108 @@ define([
         }
     }
 
-    // ---------- Property repair ----------
+    // ---------- Property sync ----------
 
-    // Make sure every dimension / measure has two attribute expressions
-    // (background, text) stored as plain strings. Objects created with an
-    // older version may hold an object instead of a string, which the engine
-    // drops, so typed colour expressions disappeared.
-    //
-    // Only the broken item is patched (applyPatches on that one path). Writing
-    // the whole property tree back could overwrite an edit the property panel
-    // was saving at the same moment, so colour changes seemed to be ignored.
-    var repairBusy = {};   // objectId -> true while a repair is in progress
-    var repairSeen = {};   // objectId|path|state -> already patched once (no loops)
+    // The property panel edits qDef.trtBackground / trtText / trtStyle with the
+    // normal fx editor. The engine only evaluates per row what is in
+    // qAttributeExpressions (as plain strings), so the extension copies the
+    // panel values there. Objects from older versions (expressions only in
+    // qAttributeExpressions) are migrated once into the panel fields.
+    // Only the changed paths are patched, so a panel edit is never overwritten.
+    var ATTR_KEYS = ['trtBackground', 'trtText', 'trtStyle'];
+    var syncBusy = {};   // objectId -> true while a sync is in progress
+    var syncSeen = {};   // objectId|path|value -> already patched once (no loops)
 
-    function fixedAttributes(item) {
+    function exprText(value) {
+        if (value === undefined || value === null) {
+            return '';
+        }
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (typeof value === 'object') {
+            if (value.qStringExpression) {
+                return value.qStringExpression.qExpr || '';
+            }
+            if (value.qValueExpression) {
+                return value.qValueExpression.qExpr || '';
+            }
+            if (value.qExpr !== undefined) {
+                return value.qExpr || '';
+            }
+        }
+        return '';
+    }
+
+    function currentAttributes(item) {
         var attrs = item.qAttributeExpressions;
         var list = [];
         if (Array.isArray(attrs)) {
-            list = attrs.slice();
+            list = attrs;
         } else if (attrs && typeof attrs === 'object') {
             Object.keys(attrs).forEach(function (k) {
                 list[parseInt(k, 10)] = attrs[k];
             });
         }
-        var broken = !Array.isArray(attrs);
-        for (var i = 0; i < 2; i++) {
-            var a = list[i];
-            if (!a || typeof a !== 'object') {
-                list[i] = { qExpression: '' };
-                broken = true;
-            } else if (a.qExpression && typeof a.qExpression === 'object') {
-                var expr = a.qExpression.qStringExpression ? a.qExpression.qStringExpression.qExpr : (a.qExpression.qExpr || '');
-                list[i] = { qExpression: expr || '' };
-                broken = true;
-            } else if (a.qExpression !== undefined && typeof a.qExpression !== 'string') {
-                list[i] = { qExpression: '' };
-                broken = true;
-            }
+        return [0, 1, 2].map(function (i) {
+            return list[i] && typeof list[i] === 'object' ? exprText(list[i].qExpression) : '';
+        });
+    }
+
+    function addPatch(objectId, path, value, patches, state) {
+        var key = objectId + '|' + path + '|' + value + '|' + (state || '');
+        if (syncSeen[key]) {
+            return;
         }
-        return broken ? list : null;
+        syncSeen[key] = true;
+        patches.push({ qOp: 'add', qPath: path, qValue: value });
     }
 
     function collectPatches(items, path, objectId, patches) {
         (items || []).forEach(function (item, i) {
-            var list = fixedAttributes(item || {});
-            if (!list) {
+            item = item || {};
+            var base = path + '/' + i;
+            var def = item.qDef && typeof item.qDef === 'object' ? item.qDef : null;
+            var current = currentAttributes(item);
+            var panelSet = def && ATTR_KEYS.some(function (k) { return def[k] !== undefined; });
+
+            if (!panelSet) {
+                // Older object: move existing expressions into the panel fields
+                if (current.join('') === '') {
+                    return;
+                }
+                var migrated = {};
+                ATTR_KEYS.forEach(function (k, n) {
+                    migrated[k] = current[n];
+                });
+                if (def) {
+                    ATTR_KEYS.forEach(function (k) {
+                        addPatch(objectId, base + '/qDef/' + k, JSON.stringify(migrated[k]), patches);
+                    });
+                } else {
+                    addPatch(objectId, base + '/qDef', JSON.stringify(migrated), patches);
+                }
                 return;
             }
-            var itemPath = path + '/' + i + '/qAttributeExpressions';
-            var key = objectId + '|' + itemPath + '|' + JSON.stringify(item.qAttributeExpressions || null);
-            if (repairSeen[key]) {
+
+            var wanted = ATTR_KEYS.map(function (k) { return exprText(def[k]); });
+            var attrsOk = Array.isArray(item.qAttributeExpressions) && item.qAttributeExpressions.length >= 3 &&
+                item.qAttributeExpressions.every(function (a) { return a && typeof a.qExpression === 'string'; });
+            if (attrsOk && wanted.join('\u0001') === current.join('\u0001')) {
                 return;
             }
-            repairSeen[key] = true;
-            patches.push({ qOp: 'add', qPath: itemPath, qValue: JSON.stringify(list) });
+            var list = wanted.map(function (w) { return { qExpression: w }; });
+            addPatch(objectId, base + '/qAttributeExpressions', JSON.stringify(list), patches, JSON.stringify(item.qAttributeExpressions || null));
         });
     }
 
-    // Runs on paint in edit mode, so a dimension or measure added a moment ago
-    // is fixed too. It only writes when something is wrong, and never the same fix twice.
+    // Runs on paint in edit mode, so changes from the panel are applied right away.
+    // It only writes what differs, and never the same patch twice.
     function repairProperties(backendApi, objectId) {
-        if (repairBusy[objectId] || !backendApi.getProperties) {
+        if (syncBusy[objectId] || !backendApi.getProperties) {
             return;
         }
-        repairBusy[objectId] = true;
+        syncBusy[objectId] = true;
         backendApi.getProperties().then(function (props) {
             var hcd = props.qHyperCubeDef || {};
             var patches = [];
@@ -1018,9 +1069,9 @@ define([
             }
             return null;
         }).then(function () {
-            repairBusy[objectId] = false;
+            syncBusy[objectId] = false;
         }, function () {
-            repairBusy[objectId] = false;
+            syncBusy[objectId] = false;
         });
     }
 

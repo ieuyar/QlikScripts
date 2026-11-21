@@ -68,9 +68,12 @@ theme until you switch them to *Custom*.
 Colour pickers offer the theme palette and a custom colour. Cell colour
 expressions always win over the alternating row and hover colours.
 
-**Colours:** every dimension and measure has a *Background colour expression* and
-a *Text colour expression* text box (type the expression starting with `=`), e.g.
+**Colours and text style:** every dimension and measure has a *Background colour
+expression*, a *Text colour expression* and a *Text style expression*, each with the
+normal fx expression editor, e.g.
 `=If(Today() - Floor([Last reload]) >= 3, RGB(248,215,218))`.
+The text style expression returns `<B>` (bold), `<I>` (italic) or `<U>` (underline),
+combinable, e.g. `='<B>'` or `=If([Status] = 'Failed', '<B><I>')`.
 
 **Sorting:** click a column header (ascending → descending → original). Empty
 values always stay at the bottom. The default order comes from the *Sorting*
