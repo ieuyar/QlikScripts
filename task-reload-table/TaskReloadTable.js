@@ -26,6 +26,7 @@ define([
             notFound: 'Task not found',
             couldNotStart: 'Could not start',
             timedOut: 'Monitoring timed out',
+            lastRun: 'Last run: ',
             invalidColumn: 'Task ID column not found: ',
             search: 'Search',
             clearSelection: 'Clear selection',
@@ -47,6 +48,7 @@ define([
             notFound: 'Task bulunamadı',
             couldNotStart: 'Başlatılamadı',
             timedOut: 'İzleme süresi doldu',
+            lastRun: 'Son çalışma: ',
             invalidColumn: 'Task ID kolonu bulunamadı: ',
             search: 'Ara',
             clearSelection: 'Seçimi temizle',
@@ -69,6 +71,8 @@ define([
     var POLL_INTERVAL = 2000;
     var MONITOR_TIMEOUT = 2 * 60 * 60 * 1000; // stop monitoring after 2 hours
     var CONFIRM_TIMEOUT = 4000;
+    var RUNNING = [1, 2, 3, 4, 5, 10];         // executionresult codes of a run in progress
+    var LIVE_MIN_SECONDS = 10;                // shortest QMC status refresh interval
     var LIST_FETCH = 5000;                    // values loaded into the search list
     var LIST_SHOW = 200;                      // values shown in the search list
 
@@ -80,6 +84,7 @@ define([
     var themeCache = {};  // appId -> styles read from the app theme
     var sessionWidths = {}; // objectId -> column widths dragged in analysis mode
     var resizeGuard = {};   // objectId -> time of the last resize (to skip the click that follows)
+    var liveState = {};     // taskId -> { running, tip } from QMC (runs started outside this object)
 
     function texts(lang) {
         return TEXTS[lang] || TEXTS.en;
@@ -97,6 +102,9 @@ define([
         $btn.removeClass('trt-ready trt-confirm trt-running trt-done trt-failed').addClass('trt-' + stage);
         $btn.find('.trt-label').text(state ? state.text : $btn.attr('data-label'));
         $btn.find('.trt-icon').toggleClass('trt-spin', stage === 'running');
+        $btn.prop('disabled', stage === 'running');
+        var live = liveState[$btn.attr('data-task')];
+        $btn.attr('title', live && live.tip ? live.tip : '');
     }
 
     // The same task can appear in several rows or objects: update all of them
@@ -107,11 +115,12 @@ define([
         });
     }
 
-    function setState(taskId, stage, text) {
+    function setState(taskId, stage, text, mine) {
         if (stage === null) {
             delete taskState[taskId];
         } else {
-            taskState[taskId] = { stage: stage, text: text };
+            var prev = taskState[taskId];
+            taskState[taskId] = { stage: stage, text: text, mine: mine === undefined ? !!(prev && prev.mine && stage === 'running') : mine };
         }
         refreshButtons(taskId);
     }
@@ -147,7 +156,7 @@ define([
                     clearInterval(timer);
                     setState(taskId, 'failed', t.status[status] + ' ' + clock());
                 } else {
-                    setState(taskId, 'running', t.status[status] || t.status[2]);
+                    setState(taskId, 'running', t.status[status] || t.status[2], true);
                 }
             }, function () {
                 // temporary error: try again on the next poll
@@ -156,17 +165,118 @@ define([
     }
 
     function startTask(taskId, watch, t) {
-        setState(taskId, 'running', t.starting);
+        setState(taskId, 'running', t.starting, true);
         qrs.startTask(taskId).then(function (executionId) {
             if (!watch || !executionId) {
                 setState(taskId, 'done', t.started + ' ' + clock());
                 return;
             }
-            setState(taskId, 'running', t.status[3]);
+            setState(taskId, 'running', t.status[3], true);
             monitor(taskId, executionId, t);
         }, function (error) {
             setState(taskId, 'failed', errorText(error, t));
         });
+    }
+
+    // ---------- Live status from QMC ----------
+
+    // Every few seconds, ask QRS for the last execution of the task IDs on screen,
+    // so runs started by a schedule, a trigger or someone in QMC disable the button too.
+    // One request for all visible tasks; paused while the browser tab is hidden.
+    var liveLastPoll = 0;
+    var liveLastIds = '';
+    var liveBusy = false;
+    var liveTimer = null;
+
+    function hhmm(iso) {
+        var d = new Date(iso);
+        if (!iso || isNaN(d.getTime()) || d.getFullYear() < 2000) {
+            return '';
+        }
+        return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+    }
+
+    function fullTime(iso) {
+        var d = new Date(iso);
+        if (!iso || isNaN(d.getTime()) || d.getFullYear() < 2000) {
+            return '';
+        }
+        var p2 = function (n) { return ('0' + n).slice(-2); };
+        return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + '.' + d.getFullYear() + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+    }
+
+    function liveTick() {
+        var $wraps = $('.trt-wrap[data-live="1"]');
+        if (!$wraps.length) {
+            clearInterval(liveTimer);
+            liveTimer = null;
+            return;
+        }
+        if (liveBusy || document.hidden) {
+            return;
+        }
+        var interval = Infinity;
+        var lang = 'en';
+        var ids = {};
+        $wraps.each(function () {
+            interval = Math.min(interval, parseInt($(this).attr('data-interval'), 10) || 15);
+            lang = $(this).attr('data-lang') || lang;
+            $(this).find('.trt-btn[data-task]').each(function () {
+                ids[String($(this).attr('data-task')).toLowerCase()] = true;
+            });
+        });
+        var list = Object.keys(ids).sort();
+        if (!list.length) {
+            return;
+        }
+        var key = list.join(',');
+        // Poll at once when new tasks appear (new selection), otherwise on the interval
+        if (key === liveLastIds && Date.now() - liveLastPoll < Math.max(interval, LIVE_MIN_SECONDS) * 1000) {
+            return;
+        }
+        liveLastIds = key;
+        liveLastPoll = Date.now();
+        liveBusy = true;
+        var t = texts(lang);
+        qrs.getTaskStatuses(list).then(function (result) {
+            liveBusy = false;
+            list.forEach(function (taskId) {
+                var r = result[taskId];
+                if (!r) {
+                    return; // not readable for this user: leave the button as it is
+                }
+                var live = liveState[taskId] || {};
+                var running = RUNNING.indexOf(r.status) > -1;
+                live.tip = running ? '' : (fullTime(r.stop) ? t.lastRun + fullTime(r.stop) + ' (' + (t.status[r.status] || '') + ')' : '');
+                var own = taskState[taskId];
+                if (running) {
+                    live.running = true;
+                    liveState[taskId] = live;
+                    setState(taskId, 'running', (t.status[r.status] || t.status[2]) + (hhmm(r.start) ? ' ' + hhmm(r.start) : ''));
+                } else if (live.running) {
+                    // A run we only saw through QMC has just finished
+                    live.running = false;
+                    liveState[taskId] = live;
+                    if (!(own && own.stage === 'running' && own.mine)) {
+                        var ok = FINISHED_OK.indexOf(r.status) > -1;
+                        setState(taskId, ok ? 'done' : 'failed', (ok ? t.done : (t.status[r.status] || t.status[8])) + (hhmm(r.stop) ? ' ' + hhmm(r.stop) : ''));
+                    }
+                } else {
+                    liveState[taskId] = live;
+                    refreshButtons(taskId);
+                }
+            });
+        }, function () {
+            liveBusy = false; // try again on the next interval
+        });
+    }
+
+    function watchLive() {
+        liveLastIds = ''; // poll right after a repaint
+        if (!liveTimer) {
+            liveTimer = setInterval(liveTick, 2000);
+        }
+        setTimeout(liveTick, 300);
     }
 
     // ---------- Data ----------
@@ -752,6 +862,13 @@ define([
 
         var scopeClass = 'trt-o-' + String(objectId).replace(/[^a-zA-Z0-9_-]/g, '');
         var $wrap = $('<div class="trt-wrap"></div>').addClass(scopeClass).toggleClass('trt-edit', ctx.editMode);
+        if (hasButton && p.liveStatus !== false && !ctx.editMode) {
+            $wrap.attr({
+                'data-live': '1',
+                'data-interval': Math.max(parseInt(p.liveInterval, 10) || 15, LIVE_MIN_SECONDS),
+                'data-lang': p.language || 'en'
+            });
+        }
         $wrap.append($('<style></style>').text(buildCss('.' + scopeClass, p, theme || {})));
 
         if (!hasButton && String(p.taskColumn == null ? '' : p.taskColumn).trim() !== '' && String(p.taskColumn).trim() !== '0') {
@@ -844,6 +961,9 @@ define([
 
         $element.css('position', 'relative').empty().append($wrap);
         applyObjectStyle($element, p);
+        if ($wrap.attr('data-live') === '1') {
+            watchLive();
+        }
 
         // Column resize: drag the right edge of a header (also in edit mode, where it is saved)
         $wrap.on('mousedown', '.trt-resize', function (e) {
@@ -1094,6 +1214,8 @@ define([
                 buttonPosition: 'right',
                 confirm: true,
                 monitor: true,
+                liveStatus: true,
+                liveInterval: 15,
                 selectOnClick: true,
                 language: 'en',
                 headerStyle: 'theme',

@@ -123,10 +123,14 @@
 }
 
 .trt-btn.trt-none,
-.trt-btn:disabled {
+.trt-btn:disabled:not(.trt-running) {
 	color: #A6A6A6;
 	border-color: #E0E0E0;
 	cursor: not-allowed;
+}
+
+.trt-btn.trt-running:disabled {
+	cursor: wait;
 }
 
 .trt-spin {

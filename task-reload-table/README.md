@@ -48,6 +48,8 @@ has an `id` and a child `app` object with the app ID.
 | Button column position | right | right / left |
 | Ask for confirmation | on | Click twice to start |
 | Monitor task status | on | Polls the task every 2 seconds |
+| Show runs started in QMC or by a schedule | on | Reads the last execution of every task on screen from QRS (one request, every 15 seconds by default, min. 10, paused while the browser tab is hidden). While a task runs, its button is disabled and shows the status and start time; afterwards it shows the result and end time. The tooltip shows the last run. Tasks the user cannot read are left as they are |
+| QMC status refresh | 15 s | |
 | Select on dimension cell click | on | Same as a native table |
 | Language of button texts | English | English / Türkçe |
 

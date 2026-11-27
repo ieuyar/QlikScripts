@@ -50,6 +50,35 @@ define(["jquery"], function ($) {
             });
         },
 
+        // Last execution of several reload tasks at once (also runs started in QMC or by a trigger).
+        // Returns { taskId: { status, start, stop } } for the tasks the user can read.
+        getTaskStatuses: function (taskIds) {
+            var chunks = [];
+            for (var i = 0; i < taskIds.length; i += 40) {
+                chunks.push(taskIds.slice(i, i + 40));
+            }
+            return Promise.all(chunks.map(function (ids) {
+                var filter = ids.map(function (id) { return 'id eq ' + id; }).join(' or ');
+                return qrs('GET', '/reloadtask/full', 'filter=' + encodeURIComponent(filter));
+            })).then(function (pages) {
+                var result = {};
+                pages.forEach(function (tasks) {
+                    (tasks || []).forEach(function (task) {
+                        var last = task.operational && task.operational.lastExecutionResult;
+                        if (!last) {
+                            return;
+                        }
+                        result[String(task.id).toLowerCase()] = {
+                            status: parseInt(last.status, 10),
+                            start: last.startTime,
+                            stop: last.stopTime
+                        };
+                    });
+                });
+                return result;
+            });
+        },
+
         // Returns the execution status code, or null if there is no result yet
         getStatus: function (executionId) {
             return qrs('GET', '/executionresult', 'filter=' + encodeURIComponent('ExecutionId eq ' + executionId)).then(function (data) {

@@ -342,6 +342,21 @@ define([], function () {
                         label: "Monitor task status",
                         defaultValue: true
                     },
+                    liveStatus: {
+                        type: "boolean",
+                        ref: "props.liveStatus",
+                        label: "Show runs started in QMC or by a schedule (disables the button while running)",
+                        defaultValue: true
+                    },
+                    liveInterval: {
+                        type: "number",
+                        ref: "props.liveInterval",
+                        label: "QMC status refresh (seconds, min. 10)",
+                        defaultValue: 15,
+                        show: function (data) {
+                            return !data.props || data.props.liveStatus !== false;
+                        }
+                    },
                     selectOnClick: {
                         type: "boolean",
                         ref: "props.selectOnClick",
